@@ -176,6 +176,30 @@
             margin: 20px 0;
             display: none;
         }
+        .url-examples {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .url-examples h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .url-examples ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .url-examples li {
+            margin-bottom: 5px;
+            word-break: break-all;
+        }
+        .url-examples li:before {
+            content: "•";
+            color: #FF0050;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
     </style>
 </head>
 <body>
@@ -188,6 +212,16 @@
         <div class="input-group">
             <input type="text" id="url" placeholder="Paste TikTok video URL here..." required>
             <button id="download-btn">Download</button>
+        </div>
+
+        <div class="url-examples">
+            <h3>Supported URL Formats:</h3>
+            <ul>
+                <li>https://www.tiktok.com/@username/video/1234567890123456789</li>
+                <li>https://vm.tiktok.com/ABCDEFG/</li>
+                <li>https://m.tiktok.com/v/1234567890123456789.html</li>
+                <li>https://www.tiktok.com/t/ABCDEFGHIJ/</li>
+            </ul>
         </div>
 
         <div class="loading">
@@ -226,10 +260,52 @@
     </div>
 
     <script>
-        document.getElementById('download-btn').addEventListener('click', async function() {
-            const url = document.getElementById('url').value.trim();
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if there's a URL in the clipboard that might be a TikTok URL
+            checkClipboardForTikTokUrl();
+            
+            // Add event listener for download button
+            document.getElementById('download-btn').addEventListener('click', processTikTokUrl);
+            
+            // Add event listener for Enter key in URL input
+            document.getElementById('url').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    processTikTokUrl();
+                }
+            });
+        });
+
+        async function checkClipboardForTikTokUrl() {
+            try {
+                const clipboardItems = await navigator.clipboard.readText();
+                if (isValidTikTokUrl(clipboardItems)) {
+                    document.getElementById('url').value = clipboardItems;
+                    // Show a subtle notification that we've detected a TikTok URL
+                    const urlInput = document.getElementById('url');
+                    urlInput.placeholder = "TikTok URL detected from clipboard! Click Download or press Enter.";
+                    urlInput.style.borderColor = "#FF0050";
+                    setTimeout(() => {
+                        urlInput.style.borderColor = "#ddd";
+                    }, 2000);
+                }
+            } catch (err) {
+                // Clipboard access might be denied, ignore errors
+                console.log('Could not read clipboard contents: ', err);
+            }
+        }
+
+        async function processTikTokUrl() {
+            const urlInput = document.getElementById('url');
+            const url = urlInput.value.trim();
+            
             if (!url) {
                 showError('Please enter a TikTok video URL');
+                return;
+            }
+            
+            // Validate URL format
+            if (!isValidTikTokUrl(url)) {
+                showError('Invalid TikTok URL format. Please check the URL and try again.');
                 return;
             }
 
@@ -239,28 +315,56 @@
             document.getElementById('error-message').style.display = 'none';
 
             try {
-                const data = await tiktokDl(url);
-                displayResult(data);
+                // First try the primary API
+                let data = await tiktokDl(url);
+                
+                // If primary API fails, try fallback
+                if (!data || !data.status) {
+                    data = await tiktokDlFallback(url);
+                }
+                
+                if (data && data.status) {
+                    displayResult(data);
+                } else {
+                    showError('Failed to download video. The video might be private or the URL is invalid.');
+                }
             } catch (error) {
+                console.error('Download error:', error);
                 showError('Failed to download video. Please check the URL and try again.');
-                console.error(error);
             } finally {
                 document.querySelector('.loading').style.display = 'none';
             }
-        });
+        }
+
+        function isValidTikTokUrl(url) {
+            // Regular expressions to match various TikTok URL formats
+            const patterns = [
+                /^https?:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i,
+                /^https?:\/\/(vm|www|m)\.tiktok\.com\/[^/]+\/?$/i,
+                /^https?:\/\/(www\.)?tiktok\.com\/t\/[^/]+\/?$/i,
+                /^https?:\/\/m\.tiktok\.com\/v\/\d+\.html/i
+            ];
+            
+            return patterns.some(pattern => pattern.test(url));
+        }
 
         function showError(message) {
             const errorElement = document.getElementById('error-message');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
+            
+            // Hide the error after 5 seconds
+            setTimeout(() => {
+                errorElement.style.display = 'none';
+            }, 5000);
         }
 
         function displayResult(data) {
             // Set basic video info
-            document.getElementById('video-title').textContent = data.title;
-            document.getElementById('video-date').textContent = data.taken_at;
-            document.getElementById('video-duration').textContent = data.duration;
-            document.getElementById('video-region').textContent = data.region;
+            document.getElementById('video-title').textContent = data.title || 'Untitled TikTok Video';
+            document.getElementById('video-date').textContent = data.taken_at || 'Date not available';
+            document.getElementById('video-duration').textContent = data.duration || 'Duration not available';
+            document.getElementById('video-region').textContent = data.region || 'Region not specified';
 
             // Set media (video or images)
             const mediaContainer = document.getElementById('media-container');
@@ -316,19 +420,19 @@
                 downloadOptions.appendChild(optionDiv);
             });
 
-            // Add music download option
+            // Add music download option if available
             if (data.music_info && data.music_info.url) {
                 const musicDiv = document.createElement('div');
                 musicDiv.className = 'download-option';
                 
                 const musicText = document.createElement('span');
-                musicText.textContent = `Music: ${data.music_info.title} - ${data.music_info.author}`;
+                musicText.textContent = `Music: ${data.music_info.title || 'Unknown'} - ${data.music_info.author || 'Unknown'}`;
                 
                 const musicBtn = document.createElement('a');
                 musicBtn.href = data.music_info.url;
                 musicBtn.className = 'download-btn';
                 musicBtn.textContent = 'Download';
-                musicBtn.download = `tiktok_music_${data.music_info.id}.mp3`;
+                musicBtn.download = `tiktok_music_${data.music_info.id || Date.now()}.mp3`;
                 
                 musicDiv.appendChild(musicText);
                 musicDiv.appendChild(musicBtn);
@@ -336,42 +440,51 @@
                 downloadOptions.appendChild(musicDiv);
             }
 
-            // Set author info
-            document.getElementById('author-avatar').src = data.author.avatar;
-            document.getElementById('author-name').textContent = data.author.nickname;
-            document.getElementById('author-id').textContent = `@${data.author.fullname}`;
+            // Set author info if available
+            if (data.author) {
+                document.getElementById('author-avatar').src = data.author.avatar || '';
+                document.getElementById('author-name').textContent = data.author.nickname || 'Unknown';
+                document.getElementById('author-id').textContent = data.author.fullname ? `@${data.author.fullname}` : '@unknown';
+            }
 
-            // Set stats
+            // Set stats if available
             const statsContainer = document.getElementById('stats');
             statsContainer.innerHTML = '';
             
-            const stats = [
-                { icon: '👁️', value: data.stats.views, label: 'views' },
-                { icon: '��️', value: data.stats.likes, label: 'likes' },
-                { icon: '💬', value: data.stats.comment, label: 'comments' },
-                { icon: '↗️', value: data.stats.share, label: 'shares' },
-                { icon: '⤵️', value: data.stats.download, label: 'downloads' }
-            ];
-            
-            stats.forEach(stat => {
-                const statDiv = document.createElement('div');
-                statDiv.className = 'stat-item';
+            if (data.stats) {
+                const stats = [
+                    { icon: '👁️', value: data.stats.views, label: 'views' },
+                    { icon: '❤️', value: data.stats.likes, label: 'likes' },
+                    { icon: '💬', value: data.stats.comment, label: 'comments' },
+                    { icon: '↗️', value: data.stats.share, label: 'shares' },
+                    { icon: '⤵️', value: data.stats.download, label: 'downloads' }
+                ];
                 
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'stat-icon';
-                iconSpan.textContent = stat.icon;
-                
-                const valueSpan = document.createElement('span');
-                valueSpan.textContent = `${stat.value} ${stat.label}`;
-                
-                statDiv.appendChild(iconSpan);
-                statDiv.appendChild(valueSpan);
-                
-                statsContainer.appendChild(statDiv);
-            });
+                stats.forEach(stat => {
+                    if (stat.value) {
+                        const statDiv = document.createElement('div');
+                        statDiv.className = 'stat-item';
+                        
+                        const iconSpan = document.createElement('span');
+                        iconSpan.className = 'stat-icon';
+                        iconSpan.textContent = stat.icon;
+                        
+                        const valueSpan = document.createElement('span');
+                        valueSpan.textContent = `${stat.value} ${stat.label}`;
+                        
+                        statDiv.appendChild(iconSpan);
+                        statDiv.appendChild(valueSpan);
+                        
+                        statsContainer.appendChild(statDiv);
+                    }
+                });
+            }
 
             // Show the result
             document.getElementById('result').style.display = 'block';
+            
+            // Scroll to the result section
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
         }
 
         function formatFileSize(bytes) {
@@ -385,14 +498,21 @@
         async function tiktokDl(url) {
             return new Promise(async (resolve, reject) => {
                 try {
-                    let data = []
+                    // First validate the URL
+                    if (!isValidTikTokUrl(url)) {
+                        throw new Error('Invalid TikTok URL format');
+                    }
+
+                    let data = [];
+                    
                     function formatNumber(integer) {
-                        let numb = parseInt(integer)
-                        return Number(numb).toLocaleString().replace(/,/g, '.')
+                        let numb = parseInt(integer);
+                        return isNaN(numb) ? '0' : Number(numb).toLocaleString().replace(/,/g, '.');
                     }
                     
                     function formatDate(n, locale = 'en') {
-                        let d = new Date(n * 1000) // Convert from seconds to milliseconds
+                        if (!n) return 'Date not available';
+                        let d = new Date(n * 1000); // Convert from seconds to milliseconds
                         return d.toLocaleDateString(locale, {
                             weekday: 'long',
                             day: 'numeric',
@@ -401,18 +521,19 @@
                             hour: 'numeric',
                             minute: 'numeric',
                             second: 'numeric'
-                        })
+                        }).replace('1970', '');
                     }
                     
+                    // Primary API endpoint
                     let domain = 'https://www.tikwm.com/api/';
-                    let res = await (await axios.post(domain, {}, {
+                    let res = await axios.post(domain, {}, {
                         headers: {
                             'Accept': 'application/json, text/javascript, */*; q=0.01',
                             'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
                             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                             'Origin': 'https://www.tikwm.com',
                             'Referer': 'https://www.tikwm.com/',
-                            'Sec-Ch-Ua': '"Not)A;Brand" ;v="24" , "Chromium" ;v="116"',
+                            'Sec-Ch-Ua': '"Not)A;Brand";v="24", "Chromium";v="116"',
                             'Sec-Ch-Ua-Mobile': '?1',
                             'Sec-Ch-Ua-Platform': 'Android',
                             'Sec-Fetch-Dest': 'empty',
@@ -427,44 +548,50 @@
                             cursor: 0,
                             web: 1,
                             hd: 1
-                        }
-                    })).data.data
+                        },
+                        timeout: 10000 // 10 seconds timeout
+                    });
 
-                    if (res?.duration == 0) {
-                        res.images.map(v => {
-                            data.push({ type: 'photo', url: v })
-                        })
+                    res = res.data.data;
+
+                    // Handle photo posts (slideshow)
+                    if (res?.duration == 0 && res.images) {
+                        res.images.forEach(v => {
+                            data.push({ type: 'photo', url: v });
+                        });
                     } else {
+                        // Handle video posts with different quality options
                         data.push({
                             type: 'watermark',
-                            url: 'https://www.tikwm.com' + res?.wmplay || "/undefined",
+                            url: res?.wmplay ? 'https://www.tikwm.com' + res.wmplay : '',
                         }, {
                             type: 'nowatermark',
-                            url: 'https://www.tikwm.com' + res?.play || "/undefined",
+                            url: res?.play ? 'https://www.tikwm.com' + res.play : '',
                         }, {
                             type: 'nowatermark_hd',
-                            url: 'https://www.tikwm.com' + res?.hdplay || "/undefined"
-                        })
+                            url: res?.hdplay ? 'https://www.tikwm.com' + res.hdplay : ''
+                        });
                     }
+
                     let json = {
                         status: true,
-                        title: res.title,
-                        taken_at: formatDate(res.create_time).replace('1970', ''),
-                        region: res.region,
-                        id: res.id,
-                        durations: res.duration,
-                        duration: res.duration + ' Seconds',
-                        cover: 'https://www.tikwm.com' + res.cover,
-                        size_wm: res.wm_size,
-                        size_nowm: res.size,
-                        size_nowm_hd: res.hd_size,
-                        data: data,
+                        title: res.title || 'Untitled TikTok Video',
+                        taken_at: formatDate(res.create_time),
+                        region: res.region || 'Unknown',
+                        id: res.id || Date.now().toString(),
+                        durations: res.duration || 0,
+                        duration: (res.duration || 0) + ' Seconds',
+                        cover: res.cover ? 'https://www.tikwm.com' + res.cover : '',
+                        size_wm: res.wm_size || 0,
+                        size_nowm: res.size || 0,
+                        size_nowm_hd: res.hd_size || 0,
+                        data: data.filter(item => item.url), // Filter out empty URLs
                         music_info: {
-                            id: res.music_info.id,
-                            title: res.music_info.title,
-                            author: res.music_info.author,
-                            album: res.music_info.album ? res.music_info.album : null,
-                            url: 'https://www.tikwm.com' + res.music || res.music_info.play
+                            id: res.music_info?.id || Date.now().toString(),
+                            title: res.music_info?.title || 'Unknown',
+                            author: res.music_info?.author || 'Unknown',
+                            album: res.music_info?.album || null,
+                            url: (res.music ? 'https://www.tikwm.com' + res.music : res.music_info?.play) || ''
                         },
                         stats: {
                             views: formatNumber(res.play_count),
@@ -474,17 +601,114 @@
                             download: formatNumber(res.download_count)
                         },
                         author: {
-                            id: res.author.id,
-                            fullname: res.author.unique_id,
-                            nickname: res.author.nickname,
-                            avatar: 'https://www.tikwm.com' + res.author.avatar
+                            id: res.author?.id || 'unknown',
+                            fullname: res.author?.unique_id || 'unknown',
+                            nickname: res.author?.nickname || 'Unknown',
+                            avatar: res.author?.avatar ? 'https://www.tikwm.com' + res.author.avatar : ''
                         }
-                    }
-                    resolve(json)
+                    };
+
+                    resolve(json);
                 } catch (e) {
-                    reject(e)
+                    reject(e);
                 }
             });
+        }
+
+        async function tiktokDlFallback(url) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Fallback API endpoint
+                    let fallbackDomain = 'https://api.tikmate.app/api/lookup';
+                    
+                    // First get the video ID from the URL
+                    let videoId = extractVideoId(url);
+                    if (!videoId) {
+                        throw new Error('Could not extract video ID from URL');
+                    }
+                    
+                    let res = await axios.post(fallbackDomain, {
+                        url: `https://www.tiktok.com/@placeholder/video/${videoId}`,
+                        hd: 1
+                    }, {
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        },
+                        timeout: 10000
+                    });
+
+                    res = res.data;
+                    
+                    if (!res.success) {
+                        throw new Error('Fallback API failed');
+                    }
+                    
+                    let json = {
+                        status: true,
+                        title: res.description || 'Untitled TikTok Video',
+                        taken_at: new Date().toLocaleDateString(),
+                        region: 'Unknown',
+                        id: videoId,
+                        durations: res.duration || 0,
+                        duration: (res.duration || 0) + ' Seconds',
+                        cover: res.thumbnail_url || '',
+                        size_wm: 0,
+                        size_nowm: res.size || 0,
+                        size_nowm_hd: res.hd_size || 0,
+                        data: [{
+                            type: 'nowatermark',
+                            url: res.video_url || ''
+                        }, {
+                            type: 'nowatermark_hd',
+                            url: res.hd_url || ''
+                        }].filter(item => item.url),
+                        music_info: {
+                            id: res.music_id || Date.now().toString(),
+                            title: res.music_title || 'Unknown',
+                            author: res.music_author || 'Unknown',
+                            url: res.music_url || ''
+                        },
+                        stats: {
+                            views: res.play_count || '0',
+                            likes: res.like_count || '0',
+                            comment: res.comment_count || '0',
+                            share: res.share_count || '0',
+                            download: res.download_count || '0'
+                        },
+                        author: {
+                            id: res.author_id || 'unknown',
+                            fullname: res.author_username || 'unknown',
+                            nickname: res.author_nickname || 'Unknown',
+                            avatar: res.author_avatar || ''
+                        }
+                    };
+
+                    resolve(json);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        function extractVideoId(url) {
+            // Extract video ID from various TikTok URL formats
+            const patterns = [
+                /\/video\/(\d+)/,
+                /\/v\/(\d+)\.html/,
+                /\/t\/([^/]+)/,
+                /\/([^/]+)\/?$/
+            ];
+            
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match && match[1]) {
+                    return match[1];
+                }
+            }
+            
+            return null;
         }
     </script>
 </body>
