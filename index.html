@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Video Downloader</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #FF0050;
+            margin-bottom: 10px;
+        }
+        .description {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        #url {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        #download-btn {
+            padding: 12px 20px;
+            background-color: #FF0050;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #download-btn:hover {
+            background-color: #e00046;
+        }
+        .result {
+            display: none;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+        .video-info {
+            margin-bottom: 20px;
+        }
+        .video-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .video-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        .video-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        video, img {
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        .download-options {
+            margin-top: 20px;
+        }
+        .download-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        .download-btn {
+            padding: 8px 15px;
+            background-color: #FF0050;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .download-btn:hover {
+            background-color: #e00046;
+        }
+        .author-info {
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .author-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+        }
+        .author-details {
+            flex: 1;
+        }
+        .author-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .author-id {
+            color: #666;
+            font-size: 14px;
+        }
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+        }
+        .stat-icon {
+            margin-right: 5px;
+            color: #FF0050;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #FF0050;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #ff0000;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TikTok Video Downloader</h1>
+            <p class="description">Download TikTok videos without watermark in HD quality</p>
+        </header>
+
+        <div class="input-group">
+            <input type="text" id="url" placeholder="Paste TikTok video URL here..." required>
+            <button id="download-btn">Download</button>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Processing your request...</p>
+        </div>
+
+        <div class="error" id="error-message"></div>
+
+        <div class="result" id="result">
+            <div class="video-info">
+                <div class="video-title" id="video-title"></div>
+                <div class="video-meta">
+                    <span id="video-date"></span>
+                    <span id="video-duration"></span>
+                    <span id="video-region"></span>
+                </div>
+            </div>
+
+            <div class="video-container" id="media-container"></div>
+
+            <div class="download-options" id="download-options"></div>
+
+            <div class="author-info" id="author-info">
+                <img class="author-avatar" id="author-avatar" src="" alt="Author Avatar">
+                <div class="author-details">
+                    <div class="author-name" id="author-name"></div>
+                    <div class="author-id" id="author-id"></div>
+                </div>
+            </div>
+
+            <div class="stats" id="stats">
+                <!-- Stats will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('download-btn').addEventListener('click', async function() {
+            const url = document.getElementById('url').value.trim();
+            if (!url) {
+                showError('Please enter a TikTok video URL');
+                return;
+            }
+
+            // Show loading, hide results and error
+            document.querySelector('.loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('error-message').style.display = 'none';
+
+            try {
+                const data = await tiktokDl(url);
+                displayResult(data);
+            } catch (error) {
+                showError('Failed to download video. Please check the URL and try again.');
+                console.error(error);
+            } finally {
+                document.querySelector('.loading').style.display = 'none';
+            }
+        });
+
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+
+        function displayResult(data) {
+            // Set basic video info
+            document.getElementById('video-title').textContent = data.title;
+            document.getElementById('video-date').textContent = data.taken_at;
+            document.getElementById('video-duration').textContent = data.duration;
+            document.getElementById('video-region').textContent = data.region;
+
+            // Set media (video or images)
+            const mediaContainer = document.getElementById('media-container');
+            mediaContainer.innerHTML = '';
+
+            if (data.data[0].type === 'photo') {
+                // Handle photo posts (slideshow)
+                data.data.forEach(item => {
+                    const img = document.createElement('img');
+                    img.src = item.url;
+                    img.alt = data.title;
+                    mediaContainer.appendChild(img);
+                });
+            } else {
+                // Handle video posts
+                const video = document.createElement('video');
+                video.src = data.data[0].url; // Use watermark version for preview
+                video.controls = true;
+                video.autoplay = true;
+                video.muted = true;
+                mediaContainer.appendChild(video);
+            }
+
+            // Set download options
+            const downloadOptions = document.getElementById('download-options');
+            downloadOptions.innerHTML = '';
+
+            data.data.forEach(item => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'download-option';
+                
+                const typeText = document.createElement('span');
+                typeText.textContent = item.type === 'photo' ? 'Photo' : 
+                                      item.type === 'watermark' ? 'With Watermark' : 
+                                      item.type === 'nowatermark' ? 'No Watermark' : 
+                                      item.type === 'nowatermark_hd' ? 'No Watermark (HD)' : item.type;
+                
+                const sizeText = document.createElement('span');
+                if (item.type === 'watermark') sizeText.textContent = formatFileSize(data.size_wm);
+                else if (item.type === 'nowatermark') sizeText.textContent = formatFileSize(data.size_nowm);
+                else if (item.type === 'nowatermark_hd') sizeText.textContent = formatFileSize(data.size_nowm_hd);
+                
+                const downloadBtn = document.createElement('a');
+                downloadBtn.href = item.url;
+                downloadBtn.className = 'download-btn';
+                downloadBtn.textContent = 'Download';
+                downloadBtn.download = `tiktok_${data.id}_${item.type}.${item.type === 'photo' ? 'jpg' : 'mp4'}`;
+                
+                optionDiv.appendChild(typeText);
+                optionDiv.appendChild(sizeText);
+                optionDiv.appendChild(downloadBtn);
+                
+                downloadOptions.appendChild(optionDiv);
+            });
+
+            // Add music download option
+            if (data.music_info && data.music_info.url) {
+                const musicDiv = document.createElement('div');
+                musicDiv.className = 'download-option';
+                
+                const musicText = document.createElement('span');
+                musicText.textContent = `Music: ${data.music_info.title} - ${data.music_info.author}`;
+                
+                const musicBtn = document.createElement('a');
+                musicBtn.href = data.music_info.url;
+                musicBtn.className = 'download-btn';
+                musicBtn.textContent = 'Download';
+                musicBtn.download = `tiktok_music_${data.music_info.id}.mp3`;
+                
+                musicDiv.appendChild(musicText);
+                musicDiv.appendChild(musicBtn);
+                
+                downloadOptions.appendChild(musicDiv);
+            }
+
+            // Set author info
+            document.getElementById('author-avatar').src = data.author.avatar;
+            document.getElementById('author-name').textContent = data.author.nickname;
+            document.getElementById('author-id').textContent = `@${data.author.fullname}`;
+
+            // Set stats
+            const statsContainer = document.getElementById('stats');
+            statsContainer.innerHTML = '';
+            
+            const stats = [
+                { icon: '👁️', value: data.stats.views, label: 'views' },
+                { icon: '��️', value: data.stats.likes, label: 'likes' },
+                { icon: '💬', value: data.stats.comment, label: 'comments' },
+                { icon: '↗️', value: data.stats.share, label: 'shares' },
+                { icon: '⤵️', value: data.stats.download, label: 'downloads' }
+            ];
+            
+            stats.forEach(stat => {
+                const statDiv = document.createElement('div');
+                statDiv.className = 'stat-item';
+                
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'stat-icon';
+                iconSpan.textContent = stat.icon;
+                
+                const valueSpan = document.createElement('span');
+                valueSpan.textContent = `${stat.value} ${stat.label}`;
+                
+                statDiv.appendChild(iconSpan);
+                statDiv.appendChild(valueSpan);
+                
+                statsContainer.appendChild(statDiv);
+            });
+
+            // Show the result
+            document.getElementById('result').style.display = 'block';
+        }
+
+        function formatFileSize(bytes) {
+            if (typeof bytes !== 'number' || isNaN(bytes)) return 'N/A';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+            return (bytes / 1073741824).toFixed(1) + ' GB';
+        }
+
+        async function tiktokDl(url) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    let data = []
+                    function formatNumber(integer) {
+                        let numb = parseInt(integer)
+                        return Number(numb).toLocaleString().replace(/,/g, '.')
+                    }
+                    
+                    function formatDate(n, locale = 'en') {
+                        let d = new Date(n * 1000) // Convert from seconds to milliseconds
+                        return d.toLocaleDateString(locale, {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: 'numeric',
+                            second: 'numeric'
+                        })
+                    }
+                    
+                    let domain = 'https://www.tikwm.com/api/';
+                    let res = await (await axios.post(domain, {}, {
+                        headers: {
+                            'Accept': 'application/json, text/javascript, */*; q=0.01',
+                            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'Origin': 'https://www.tikwm.com',
+                            'Referer': 'https://www.tikwm.com/',
+                            'Sec-Ch-Ua': '"Not)A;Brand" ;v="24" , "Chromium" ;v="116"',
+                            'Sec-Ch-Ua-Mobile': '?1',
+                            'Sec-Ch-Ua-Platform': 'Android',
+                            'Sec-Fetch-Dest': 'empty',
+                            'Sec-Fetch-Mode': 'cors',
+                            'Sec-Fetch-Site': 'same-origin',
+                            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        params: {
+                            url: url,
+                            count: 12,
+                            cursor: 0,
+                            web: 1,
+                            hd: 1
+                        }
+                    })).data.data
+
+                    if (res?.duration == 0) {
+                        res.images.map(v => {
+                            data.push({ type: 'photo', url: v })
+                        })
+                    } else {
+                        data.push({
+                            type: 'watermark',
+                            url: 'https://www.tikwm.com' + res?.wmplay || "/undefined",
+                        }, {
+                            type: 'nowatermark',
+                            url: 'https://www.tikwm.com' + res?.play || "/undefined",
+                        }, {
+                            type: 'nowatermark_hd',
+                            url: 'https://www.tikwm.com' + res?.hdplay || "/undefined"
+                        })
+                    }
+                    let json = {
+                        status: true,
+                        title: res.title,
+                        taken_at: formatDate(res.create_time).replace('1970', ''),
+                        region: res.region,
+                        id: res.id,
+                        durations: res.duration,
+                        duration: res.duration + ' Seconds',
+                        cover: 'https://www.tikwm.com' + res.cover,
+                        size_wm: res.wm_size,
+                        size_nowm: res.size,
+                        size_nowm_hd: res.hd_size,
+                        data: data,
+                        music_info: {
+                            id: res.music_info.id,
+                            title: res.music_info.title,
+                            author: res.music_info.author,
+                            album: res.music_info.album ? res.music_info.album : null,
+                            url: 'https://www.tikwm.com' + res.music || res.music_info.play
+                        },
+                        stats: {
+                            views: formatNumber(res.play_count),
+                            likes: formatNumber(res.digg_count),
+                            comment: formatNumber(res.comment_count),
+                            share: formatNumber(res.share_count),
+                            download: formatNumber(res.download_count)
+                        },
+                        author: {
+                            id: res.author.id,
+                            fullname: res.author.unique_id,
+                            nickname: res.author.nickname,
+                            avatar: 'https://www.tikwm.com' + res.author.avatar
+                        }
+                    }
+                    resolve(json)
+                } catch (e) {
+                    reject(e)
+                }
+            });
+        }
+    </script>
+</body>
+</html>
